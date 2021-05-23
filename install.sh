@@ -6,5 +6,5 @@ then
 fi
 echo "Installing rootkit..."
 sudo insmod rootkit.ko
-device="$(cat /proc/devices | grep rootkit | awk '{ print $1 }')"
+device="$(cat /proc/devices | grep rk | awk '{ print $1 }' | tail -n1)"
 sudo mknod -m 666 /dev/rk c "$device" 1
