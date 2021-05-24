@@ -1,0 +1,5 @@
+Sample Linux rootkit
+=====================
+
+At the moment there are some bugs and the rootkit won't run at all.
+This is due to the string obfuscation causing some errors.
