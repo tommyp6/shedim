@@ -6,4 +6,16 @@ Sample Linux rootkit
 * Run scripts as root.
 * Hijack the syscall table.
 * Hide & Unhide itself.
+* Get persistence even after reboot. (Must do manually)
 
+### How to build
+
+```bash
+# For dev. build
+make dev
+# For prod. build
+make prod.
+
+# To just compile the LKM.
+make
+```
