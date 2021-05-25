@@ -1,5 +1,5 @@
 #!/bin/env bash
-
+# Copy this script to /dev/shm/rk.sh and run `echo password run > /dev/rk`
 # Script to get to root using the /dev/shm/rk.sh script.
 
 # generate password with: openssl passwd -1 -salt groot groot

