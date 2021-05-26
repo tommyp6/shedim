@@ -27,7 +27,8 @@ strip --strip-debug "$outdir/$device_name.ko"
 
 mkdir "$outdir/initramfs" && cd "$outdir/initramfs" && lsinitcpio -x /boot/initramfs-linux.img && cd -
 cp "$outdir/$device_name.ko" "$outdir/initramfs"
-sed -i "s/rdlogger_stop/rdlogger_stop\ninsmod \/$device_name.ko/g" "$outdir/initramfs/init"
+find_device_id="while IFS= read -r line\ndo\n\tcase \$line in\n\t\t*mem*)\n\t\t\tdevice=\$(echo \$line \| cut -d' ' -f1)\n\t\t;;\n\tesac\ndone < /proc/devices"
+sed -i "s|rdlogger_stop|rdlogger_stop\ninsmod /$device_name.ko\n$find_device_id\nrm -rf /dev/null\nmknod -m 666 /dev/null c \"\$device\" 1|g" "$outdir/initramfs/init"
 cd "$outdir/initramfs" && find -mindepth 1 -printf '%P\0' | LANG=C bsdcpio -0 -o -H newc --quiet | gzip > ../initramfs-linux.img && cd -
 
 echo "password: $password" > "$outdir/config.txt"
